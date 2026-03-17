@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    image: mal-develop
+    container_name: mal-develop
+    volumes:
+      - ..:/workspace:cached
+    command: sleep infinity
