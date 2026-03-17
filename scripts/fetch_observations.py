@@ -114,5 +114,5 @@ if __name__ == "__main__":
         stationId,
     )
 
-    with open(f"observations_{stationId}.csv", "w", newline="\n") as f:
+    with open(f"../data/observations_{stationId}.csv", "w", newline="\n") as f:
         df.to_csv(f, index=False)
