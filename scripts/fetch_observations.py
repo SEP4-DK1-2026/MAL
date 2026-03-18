@@ -21,6 +21,7 @@ class WeatherFeature(StrEnum):
     PRESSURE = "pressure"  # hPa
     WIND_DIRECTION = "wind_dir"  # degrees
     WIND_SPEED = "wind_speed"  # m/s
+    PRECIPITATION = "precip_past1h"  # kg/m^2 which is the same as mm. amount in the last hour. -0.1 means the value is anywhere below 0.1
 
 
 class Observation:
@@ -115,6 +116,7 @@ if __name__ == "__main__":
             WeatherFeature.PRESSURE,
             WeatherFeature.WIND_DIRECTION,
             WeatherFeature.WIND_SPEED,
+            WeatherFeature.PRECIPITATION,
         ],
         start,
         end,
