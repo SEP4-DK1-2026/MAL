@@ -1,5 +1,5 @@
 {
-    "name": "dev_environment",
+    "name": "MAL-SEP4",
     "build": {
         "dockerfile": "Dockerfile",
         "context": ".."
