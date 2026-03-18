@@ -78,6 +78,8 @@ def get_observations(
         )
         first_request = False
 
+        print(f"Fetched {len(features)} points of {parameterId} since {end}")
+
     return observations
 
 
