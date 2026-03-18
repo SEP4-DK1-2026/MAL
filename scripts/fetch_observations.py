@@ -24,12 +24,6 @@ class WeatherFeature(StrEnum):
     PRECIPITATION = "precip_past1h"  # kg/m^2 which is the same as mm. amount in the last hour. -0.1 means the value is anywhere below 0.1
 
 
-class Observation:
-    def __init__(self, value, time):
-        self.value = value
-        self.time = time
-
-
 def datetime_to_str(time):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -38,13 +32,15 @@ def str_to_datetime(s):
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ")
 
 
-def get_observations(parameterId: str, start: datetime, end: datetime, stationId: WeatherStation) -> list[Observation]:
+def get_observations(
+    parameterId: str, start: datetime, end: datetime, stationId: WeatherStation
+) -> pd.DataFrame:
     chunk_size = 300000
-    observations = []
+    observations = pd.DataFrame()
     features = []
     first_request = True
 
-    while first_request or len(features) < chunk_size:
+    while first_request or len(features) == chunk_size:
         parameters = {
             "stationId": stationId,
             "parameterId": parameterId,
@@ -52,7 +48,9 @@ def get_observations(parameterId: str, start: datetime, end: datetime, stationId
             "limit": chunk_size,
         }
 
-        parameters_string = f"?{'&'.join([f'{key}={value}' for key, value in parameters.items()])}"
+        parameters_string = (
+            f"?{'&'.join([f'{key}={value}' for key, value in parameters.items()])}"
+        )
         actual_url = f"{URL}{parameters_string}"
 
         response = requests.get(actual_url)
@@ -63,44 +61,40 @@ def get_observations(parameterId: str, start: datetime, end: datetime, stationId
             break
 
         features = data["features"]
-        observations.extend(Observation(feature["properties"]["value"], str_to_datetime(feature["properties"]["observed"])) for feature in features)
+        df = pd.DataFrame(
+            {
+                "observed": (
+                    str_to_datetime(feature["properties"]["observed"])
+                    for feature in features
+                ),
+                parameterId: (feature["properties"]["value"] for feature in features),
+            }
+        )
 
-        end = observations[-1].time - timedelta(seconds=1)
+        observations = pd.concat([observations, df])
+
+        end = str_to_datetime(features[-1]["properties"]["observed"]) - timedelta(
+            seconds=1
+        )
         first_request = False
 
     return observations
 
 
-def add_observation_to_df(
-    df,
-    weather_feature: WeatherFeature,
-    start: datetime,
-    end: datetime,
-    stationId: WeatherStation,
-):
-    observations = get_observations(weather_feature, start, end, stationId)
-    observations_df = pd.DataFrame(
-        {
-            "observed": [observation.time for observation in observations],
-            weather_feature: [observation.value for observation in observations],
-        }
-    )
-
-    try:
-        return df.merge(observations_df, how="left")
-    except Exception:
-        return observations_df
-
-
 def get_all_observations(
-    features: list[WeatherFeature],
+    weather_features: list[WeatherFeature],
     start: datetime,
     end: datetime,
     stationId: WeatherStation,
 ):
     df = pd.DataFrame()
-    for feature in features:
-        df = add_observation_to_df(df, feature, start, end, stationId)
+    for feature in weather_features:
+        observations_df = get_observations(feature, start, end, stationId)
+        try:
+            df = df.merge(observations_df, how="left")
+        except Exception:
+            df = observations_df
+
     return df
 
 
@@ -123,5 +117,7 @@ if __name__ == "__main__":
         stationId,
     )
 
-    with open(Path(__file__, f"../../data/observations_{stationId}.csv"), "w", newline="\n") as f:
+    with open(
+        Path(__file__, f"../../data/observations_{stationId}.csv"), "w", newline="\n"
+    ) as f:
         df.to_csv(f, index=False)
