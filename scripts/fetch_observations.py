@@ -1,11 +1,12 @@
-from datetime import datetime, timedelta
 import json
+from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 
 import pandas as pd
 import requests
 
+# documentation: https://www.dmi.dk/friedata/dokumentation/meteorological-observation-api
 URL = "https://opendataapi.dmi.dk/v2/metObs/collections/observation/items"
 
 
@@ -36,30 +37,35 @@ def str_to_datetime(s):
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ")
 
 
-def get_observations(
-    parameterId: str, start: datetime, end: datetime, stationId: WeatherStation
-) -> list[Observation]:
-    parameters = {
-        "stationId": stationId,
-        "parameterId": parameterId,
-        "datetime": f"{datetime_to_str(start)}/{datetime_to_str(end)}",
-        "limit": "300000",
-    }
-
-    parameters_string = (
-        f"?{'&'.join([f'{key}={value}' for key, value in parameters.items()])}"
-    )
-    actual_url = f"{URL}{parameters_string}"
-
-    data = requests.get(actual_url)
-    data = json.loads(data.text)
-
+def get_observations(parameterId: str, start: datetime, end: datetime, stationId: WeatherStation) -> list[Observation]:
+    chunk_size = 300000
     observations = []
-    for feature in data["features"]:
-        properties = feature["properties"]
-        observations.append(
-            Observation(properties["value"], str_to_datetime(properties["observed"]))
-        )
+    features = []
+    first_request = True
+
+    while first_request or len(features) < chunk_size:
+        parameters = {
+            "stationId": stationId,
+            "parameterId": parameterId,
+            "datetime": f"{datetime_to_str(start)}/{datetime_to_str(end)}",
+            "limit": chunk_size,
+        }
+
+        parameters_string = f"?{'&'.join([f'{key}={value}' for key, value in parameters.items()])}"
+        actual_url = f"{URL}{parameters_string}"
+
+        response = requests.get(actual_url)
+        data = json.loads(response.text)
+
+        if response.status_code != 200:
+            print(data)
+            break
+
+        features = data["features"]
+        observations.extend(Observation(feature["properties"]["value"], str_to_datetime(feature["properties"]["observed"])) for feature in features)
+
+        end = observations[-1].time - timedelta(seconds=1)
+        first_request = False
 
     return observations
 
@@ -99,7 +105,7 @@ def get_all_observations(
 
 if __name__ == "__main__":
     end = datetime.now()
-    start = end - timedelta(365 * 4 + 1)  # 4 years back
+    start = datetime(2000, 1, 1, 0, 0, 0)
     stationId = WeatherStation.BYGHOLM
 
     df = get_all_observations(
