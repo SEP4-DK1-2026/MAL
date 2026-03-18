@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import json
 from enum import StrEnum
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -114,5 +115,5 @@ if __name__ == "__main__":
         stationId,
     )
 
-    with open(f"../data/observations_{stationId}.csv", "w", newline="\n") as f:
+    with open(Path(__file__, f"../../data/observations_{stationId}.csv"), "w", newline="\n") as f:
         df.to_csv(f, index=False)
