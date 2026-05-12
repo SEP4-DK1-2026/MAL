@@ -4,3 +4,4 @@ ipykernel
 matplotlib
 numpy
 ruff
+cloudpickle
