@@ -4,4 +4,6 @@ ipykernel
 matplotlib
 numpy
 ruff
+fastparquet
+
 cloudpickle
