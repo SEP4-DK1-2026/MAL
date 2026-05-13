@@ -6,8 +6,7 @@ numpy
 ruff
 
 fastparquet
-
-cloudpickle
 python-dotenv
+cloudpickle
 azure-storage-blob
 psycopg2-binary
