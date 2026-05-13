@@ -74,15 +74,6 @@ EXPECTED_FEATURES = [
     "prediction_offset",
 ]
 
-data = None
-
-
-def get_data():
-    global data
-    if data is None:
-        data = pd.read_parquet(root.joinpath("data/historical_data_06102.parquet"))
-    return data
-
 
 def deploy_models():
     models_path = Path(root, "models")
@@ -119,6 +110,10 @@ def deploy_models():
             raise Exception(
                 f"[ERROR] Module '{model_name}' has no 'train_model' function"
             )
+        if not hasattr(module, "get_test_set"):
+            raise Exception(
+                f"[ERROR] Module '{model_name}' has no 'get_test_set' function"
+            )
 
         print(f"[INFO] Training model '{model_name}'")
         model: Pipeline = module.train_model()
@@ -134,10 +129,7 @@ def deploy_models():
                 msg += f". Unexpected feature(s): '{unexpected_features}'"
             raise Exception(msg)
 
-        data = get_data()
-        data = data.dropna()
-        data = data.sample(n=10000, random_state=42)
-        X, y = get_sets(data, seed=42, do_split=False)
+        X, y = module.get_test_set()
 
         y_hat = model.predict(X)
         feature_out_length = len(y_hat[0])

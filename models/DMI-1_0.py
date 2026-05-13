@@ -6,8 +6,7 @@ from pathlib import Path
 from utils import split_time, get_sets
 
 
-def train_model():
-
+def train_model() -> Pipeline:
     model = MultiOutputRegressor(
         HistGradientBoostingRegressor(
             learning_rate=0.05,
@@ -43,7 +42,17 @@ def train_model():
     )
     new_data = dropper_pipeline.fit_transform(raw_data)
     new_data = new_data.sample(n=1000000, random_state=42)
-    X, y = get_sets(new_data, seed=42, do_split=False)
-    model.fit(X, y)
+    train, test = get_sets(new_data, seed=42, include_validate=False)
 
+    global test_set
+    test_set = test
+
+    model.fit(*train)
     return model
+
+
+test_set = None
+
+
+def get_test_set() -> tuple[pd.DataFrame, pd.DataFrame]:
+    return test_set
