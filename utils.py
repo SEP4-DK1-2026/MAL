@@ -132,17 +132,19 @@ def split_time(
     return X
 
 
-def split_set(X, y, seed):
+def split_set(X, y, seed, include_validate=True):
     X_tune, X_test, y_tune, y_test = train_test_split(
         X, y, test_size=0.2, random_state=seed
     )
+    if not include_validate:
+        return ((X_tune, y_tune), (X_test, y_test))
     X_train, X_validate, y_train, y_validate = train_test_split(
         X_tune, y_tune, test_size=0.2, random_state=seed
     )
     return ((X_train, y_train), (X_validate, y_validate), (X_test, y_test))
 
 
-def get_sets(data, seed=42, do_split=True, drop_y_nan=True):
+def get_sets(data, seed=42, do_split=True, drop_y_nan=True, include_validate=True):
     y_labels = [label for label in data.columns if label.startswith("future_")]
 
     if drop_y_nan:
@@ -151,7 +153,7 @@ def get_sets(data, seed=42, do_split=True, drop_y_nan=True):
     y = data[y_labels]
 
     if do_split:
-        return split_set(X, y, seed)
+        return split_set(X, y, seed, include_validate=include_validate)
     else:
         return (X, y)
 
