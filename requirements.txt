@@ -4,6 +4,10 @@ ipykernel
 matplotlib
 numpy
 ruff
+
 fastparquet
 
 cloudpickle
+python-dotenv
+azure-storage-blob
+psycopg2-binary
