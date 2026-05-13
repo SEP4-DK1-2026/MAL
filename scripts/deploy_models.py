@@ -33,19 +33,35 @@ RUN_DRY: bool = False
 
 MODEL_NAME_PATTERN = re.compile("^(.{1,3})-(\d+)_(\d+)")
 
-blob_service_client: BlobServiceClient = BlobServiceClient.from_connection_string(
-    AZURE_STORAGE_CONNECTION_STRING
-)
-container_client: ContainerClient = blob_service_client.get_container_client(
-    container=AZURE_BLOB_CONTAINER_NAME
-)
-database_client = psycopg2.connect(
-    host=PSQL_SERVER,
-    port=PSQL_PORT,
-    database=PSQL_DATABASE,
-    user=PSQL_USER,
-    password=PSQL_PASSWORD,
-)
+blob_service_client: BlobServiceClient = None
+container_client: ContainerClient = None
+
+
+def connect_to_azure():
+    global blob_service_client, container_client
+    if blob_service_client is None:
+        blob_service_client = BlobServiceClient.from_connection_string(
+            AZURE_STORAGE_CONNECTION_STRING
+        )
+        container_client = blob_service_client.get_container_client(
+            container=AZURE_BLOB_CONTAINER_NAME
+        )
+
+
+database_client = None
+
+
+def connect_to_database():
+    global database_client
+    if database_client is None:
+        database_client = psycopg2.connect(
+            host=PSQL_SERVER,
+            port=PSQL_PORT,
+            database=PSQL_DATABASE,
+            user=PSQL_USER,
+            password=PSQL_PASSWORD,
+        )
+
 
 EXPECTED_FEATURES = [
     "time",
@@ -71,7 +87,7 @@ def get_data():
 def deploy_models():
     models_path = Path(root, "models")
     if not models_path.exists():
-        raise FileNotFoundError("No directory with name 'models'")
+        raise FileNotFoundError("[ERROR] No directory with name 'models'")
 
     model_paths = [
         Path(root, f)
@@ -79,6 +95,7 @@ def deploy_models():
         if Path(models_path, f).is_file() and f.endswith(".py") and f != "__init__.py"
     ]
 
+    connect_to_azure()
     EXISTING_MODELS = [
         f.removesuffix(".pkl") for f in container_client.list_blob_names()
     ]
@@ -88,10 +105,9 @@ def deploy_models():
 
         match = MODEL_NAME_PATTERN.match(model_name)
         if match is None:
-            print(
-                f"[WARNING] Model '{model_name}' does not follow the model naming convention"
+            raise Exception(
+                f"[ERROR] Model '{model_name}' does not follow the model naming convention"
             )
-            continue
 
         module = importlib.import_module(f"models.{model_name}")
 
@@ -100,8 +116,9 @@ def deploy_models():
             continue
 
         if not hasattr(module, "train_model"):
-            print(f"[WARNING] Module '{model_name}' has no 'train_model' function")
-            continue
+            raise Exception(
+                f"[ERROR] Module '{model_name}' has no 'train_model' function"
+            )
 
         print(f"[INFO] Training model '{model_name}'")
         model: Pipeline = module.train_model()
@@ -110,13 +127,12 @@ def deploy_models():
         missing_features = set().difference(set(features))
         unexpected_features = set(features).difference(set(EXPECTED_FEATURES))
         if len(unexpected_features) > 0 or len(missing_features) > 0:
-            msg = f"[WARNING] Model '{model_name}' does not follow input interface"
+            msg = f"[ERROR] Model '{model_name}' does not follow input interface"
             if len(missing_features) > 0:
                 msg += f". Missing feature(s): '{missing_features}'"
             if len(unexpected_features) > 0:
                 msg += f". Unexpected feature(s): '{unexpected_features}'"
-            print(msg)
-            continue
+            raise Exception(msg)
 
         data = get_data()
         data = data.dropna()
@@ -126,21 +142,19 @@ def deploy_models():
         y_hat = model.predict(X)
         feature_out_length = len(y_hat[0])
         if feature_out_length != 6:
-            print(
-                f"[WARNING] Model '{model_name}' does not follow input interface. Expected 6 output features, got {feature_out_length}"
+            raise Exception(
+                f"[ERROR] Model '{model_name}' does not follow input interface. Expected 6 output features, got {feature_out_length}"
             )
-            continue
 
-        failed_scoring = False
         for i, y_feature in enumerate(y.columns):
             score = r2_score(y[y_feature], [row[i] for row in y_hat])
             if score <= 0:
-                print(
-                    f"[WARNING] Model '{model_name}' scored a r2 score of {score} on {y_feature}, which is too low"
+                raise Exception(
+                    f"[ERROR] Model '{model_name}' scored a r2 score of {score} on {y_feature}, which is too low"
                 )
-                failed_scoring = True
-        if failed_scoring:
-            continue
+            print(
+                f"[INFO] Model '{model_name}' scored a r2 score of {score} on {y_feature}"
+            )
 
         serialized_model = cloudpickle.dumps(model, protocol=5)
 
@@ -154,6 +168,7 @@ def deploy_models():
         blob_client.upload_blob(serialized_model)
 
         # Update database
+        connect_to_database()
         cursor = database_client.cursor()
         name, major_version, minor_version = (match.group(i) for i in range(1, 4))
         cursor.execute(
@@ -165,7 +180,7 @@ def deploy_models():
 
 
 if __name__ == "__main__":
-    RUN_DRY = "dry" in sys.argv
+    RUN_DRY = "--dry" in sys.argv
     try:
         if not RUN_DRY and "-y" not in sys.argv:
             answer = input(
@@ -176,4 +191,5 @@ if __name__ == "__main__":
         else:
             deploy_models()
     finally:
-        database_client.close()
+        if database_client is not None:
+            database_client.close()

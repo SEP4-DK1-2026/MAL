@@ -1,0 +1,25 @@
+name: Verify models
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+          AZURE_BLOB_CONTAINER_NAME: ${{ secrets.AZURE_BLOB_CONTAINER_NAME }}
+          PSQL_SERVER: ${{ secrets.PSQL_SERVER }}
+          PSQL_PORT: ${{ secrets.PSQL_PORT }}
+          PSQL_DATABASE: ${{ secrets.PSQL_DATABASE }}
+          PSQL_USER: ${{ secrets.PSQL_USER }}
+          PSQL_PASSWORD: ${{ secrets.PSQL_PASSWORD }}
+        run: python -u scripts/deploy_models.py --dry
+        
