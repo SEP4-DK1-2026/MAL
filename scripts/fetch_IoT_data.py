@@ -9,11 +9,11 @@ import psycopg2
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 DB_CONFIG = {
-    "host": os.getenv("PGHOST"),
-    "dbname": os.getenv("PGDATABASE"),
-    "user": os.getenv("PGUSER"),
-    "password": os.getenv("PGPASSWORD"),
-    "port": int(os.getenv("PGPORT")),
+    "host": os.getenv("PSQL_HOST"),
+    "dbname": os.getenv("PSQL_DATABASE"),
+    "user": os.getenv("PSQL_USER"),
+    "password": os.getenv("PSQL_PASSWORD"),
+    "port": int(os.getenv("PSQL_PORT")),
     "sslmode": "require",
 }
 
@@ -46,7 +46,6 @@ def fetch_iot_data(conn):
 
 def write_to_parquet(df: pd.DataFrame, output_path: Path):
     try:
-        output_path = Path(__file__).parent.parent / "data" / "IoT_data.parquet"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(output_path, index=False)
         print(f"Saved {len(df)} rows to {output_path}")
