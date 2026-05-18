@@ -1,6 +1,7 @@
 from sklearn.model_selection import train_test_split
 from datetime import datetime
 import numpy as np
+import pandas as pd
 
 
 def _encode_cyclic(value, range_start, range_stop):
@@ -160,3 +161,52 @@ def get_sets(data, seed=42, do_split=True, drop_y_nan=True, include_validate=Tru
 
 def drop_before(X, before_date):
     return X.drop(X[X["time"] < before_date.timestamp()].index)
+
+
+def get_closest_row(data, timestamp, cache, strict=True):
+    closest_row = None
+    if timestamp not in cache:
+        abs_difference = abs(data["time"] - timestamp)
+        closest_row_idx = abs_difference.idxmin()
+        if strict and abs_difference[closest_row_idx] > 5 * 60:
+            closest_row = None
+            closest_row_idx = None
+        else:
+            closest_row = data.iloc[closest_row_idx]
+        cache[timestamp] = closest_row_idx
+    else:
+        closest_row_idx = cache[timestamp]
+        if closest_row_idx is not None:
+            closest_row = data.iloc[closest_row_idx]
+    return closest_row
+
+
+def add_target(data, features, days_range=7):
+    new_rows = []
+    hours = days_range * 24 + 1
+    for row in data.iloc:
+        new_rows.extend([row] * hours)
+    new_data = pd.DataFrame(new_rows, columns=data.columns)
+
+    predictions_offsets = range(0, hours)
+    new_data["prediction_offset"] = [*predictions_offsets] * len(data)
+
+    print("Done preparing for target")
+
+    closets_row_cache = {}
+    new_cols = {}
+    for row in new_data.iloc:
+        future_row = get_closest_row(
+            data, row["time"] + row["prediction_offset"] * 60 * 60, closets_row_cache
+        )
+
+        for feature in features:
+            new_cols.setdefault(f"future_{feature}", [])
+            new_cols[f"future_{feature}"].append(
+                future_row[feature] if future_row is not None else None
+            )
+
+    for key, value in new_cols.items():
+        new_data[key] = value
+
+    return new_data

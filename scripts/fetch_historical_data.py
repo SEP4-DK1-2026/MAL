@@ -7,6 +7,12 @@ import time
 import pandas as pd
 import requests
 
+import sys
+
+root = Path(__file__).parent.joinpath("../").resolve()
+sys.path.append(str(root))
+from utils import add_target
+
 # documentation: https://www.dmi.dk/friedata/dokumentation/meteorological-observation-api
 URL = "https://opendataapi.dmi.dk/v2/metObs/collections/observation/items"
 
@@ -113,57 +119,6 @@ def get_all_observations(
     df["light"] *= 122
 
     return df
-
-
-closest_row_cache = {}
-
-
-def get_closest_row(data, timestamp, strict=True):
-    closest_row = None
-    if timestamp not in closest_row_cache:
-        abs_difference = abs(data["time"] - timestamp)
-        closest_row_idx = abs_difference.idxmin()
-        if strict and abs_difference[closest_row_idx] > 5 * 60:
-            closest_row = None
-            closest_row_idx = None
-        else:
-            closest_row = data.iloc[closest_row_idx]
-        closest_row_cache[timestamp] = closest_row_idx
-    else:
-        closest_row_idx = closest_row_cache[timestamp]
-        if closest_row_idx is not None:
-            closest_row = data.iloc[closest_row_idx]
-    return closest_row
-
-
-def add_target(data, features, days_range=7):
-    new_rows = []
-    hours = days_range * 24 + 1
-    for row in data.iloc:
-        new_rows.extend([row] * hours)
-    new_data = pd.DataFrame(new_rows, columns=data.columns)
-
-    predictions_offsets = range(0, hours)
-    new_data["prediction_offset"] = [*predictions_offsets] * len(data)
-
-    print("Done preparing for target")
-
-    new_cols = {}
-    for row in new_data.iloc:
-        future_row = get_closest_row(
-            data, row["time"] + row["prediction_offset"] * 60 * 60
-        )
-
-        for feature in features:
-            new_cols.setdefault(f"future_{feature}", [])
-            new_cols[f"future_{feature}"].append(
-                future_row[feature] if future_row is not None else None
-            )
-
-    for key, value in new_cols.items():
-        new_data[key] = value
-
-    return new_data
 
 
 def save_data(data, name, format):
