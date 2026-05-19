@@ -42,6 +42,24 @@ def fetch_iot_data(conn):
         )
         print(f"Fetched {len(df)} rows")
 
+        # clean up
+        df["humidity"] = df["humidity"].clip(lower=0, upper=100)
+        last_index = None
+        for index, _ in df.sort_values(by=["time"], ascending=True).iterrows():
+            if last_index is None:
+                last_index = index
+                continue
+            temp_diff = df.loc[index, "temperature"] - df.loc[last_index, "temperature"]
+            hum_diff = df.loc[index, "humidity"] - df.loc[last_index, "humidity"]
+            if temp_diff > 5:
+                df.loc[index, "temperature"] = (
+                    df.loc[last_index, "temperature"] + temp_diff * 0.5
+                )
+                df.loc[index, "humidity"] = (
+                    df.loc[last_index, "humidity"] + hum_diff * 0.5
+                )
+
+        # add target
         df = add_target(
             df,
             [
@@ -54,6 +72,7 @@ def fetch_iot_data(conn):
             ],
             days_range=7,
         )
+
         write_to_parquet(df, Path(__file__).parent.parent / "data" / "IoT_data.parquet")
 
     except psycopg2.Error as exc:
