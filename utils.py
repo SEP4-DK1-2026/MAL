@@ -45,6 +45,7 @@ def split_time(
     year=True,
     month=True,
     day=True,
+    day_of_year=False,
     hour=True,
     minute=False,
     second=False,
@@ -83,6 +84,21 @@ def split_time(
                 31,
                 new_feature_suffix="day",
                 get_feature=lambda row: datetime.fromtimestamp(row["time"]).day,
+            )
+    if day_of_year:
+        if not make_cyclic:
+            X["day_of_year"] = X[["time"]].apply(
+                lambda row: datetime.fromtimestamp(row["time"]).timetuple().tm_yday,
+                axis="columns",
+            )
+        else:
+            encode_cyclic(
+                X,
+                "time",
+                1,
+                365.25,
+                new_feature_suffix="day_of_year",
+                get_feature=lambda row: datetime.fromtimestamp(row["time"]).timetuple().tm_yday,
             )
     if hour:
         if not make_cyclic:
@@ -143,6 +159,66 @@ def split_set(X, y, seed, include_validate=True):
         X_tune, y_tune, test_size=0.2, random_state=seed
     )
     return ((X_train, y_train), (X_validate, y_validate), (X_test, y_test))
+
+
+def get_sets_temporal(data, seed=42, do_split=True, drop_y_nan=True, include_validate=False):
+    y_labels = [label for label in data.columns if label.startswith("future_")]
+
+    if drop_y_nan:
+        data = data.dropna(subset=y_labels)
+
+    data = data.sort_values("time").reset_index(drop=True)
+    X = data.drop([*y_labels], axis="columns")
+    y = data[y_labels]
+
+    if not do_split:
+        return (X, y)
+
+    n_samples = len(X)
+
+    if include_validate:
+        train_end = int(n_samples * 0.70)
+        val_end = int(n_samples * 0.85)
+        X_train, X_validate, X_test = X.iloc[:train_end], X.iloc[train_end:val_end], X.iloc[val_end:]
+        y_train, y_validate, y_test = y.iloc[:train_end], y.iloc[train_end:val_end], y.iloc[val_end:]
+        return ((X_train, y_train), (X_validate, y_validate), (X_test, y_test))
+
+    train_end = int(n_samples * 0.80)
+    X_train, X_test = X.iloc[:train_end], X.iloc[train_end:]
+    y_train, y_test = y.iloc[:train_end], y.iloc[train_end:]
+    return ((X_train, y_train), (X_test, y_test))
+
+
+def split_set_temporal(data, time_column="time", train_ratio=0.7, val_ratio=0.15):
+    data = data.sort_values(time_column).reset_index(drop=True)
+    unique_times = np.array(sorted(data[time_column].unique()))
+    n_unique_times = len(unique_times)
+
+    train_end_idx = max(1, int(n_unique_times * train_ratio))
+    val_end_idx = max(train_end_idx + 1, int(n_unique_times * (train_ratio + val_ratio)))
+    val_end_idx = min(val_end_idx, n_unique_times - 1)
+
+    train_max_time = unique_times[train_end_idx - 1]
+    val_max_time = unique_times[val_end_idx - 1]
+
+    train_mask = data[time_column] <= train_max_time
+    val_mask = (data[time_column] > train_max_time) & (data[time_column] <= val_max_time)
+    test_mask = data[time_column] > val_max_time
+
+    train = data.loc[train_mask].copy()
+    validate = data.loc[val_mask].copy()
+    test = data.loc[test_mask].copy()
+
+    return (
+        train,
+        validate,
+        test,
+        {
+            "n_unique_times": n_unique_times,
+            "train_max_time": train_max_time,
+            "val_max_time": val_max_time,
+        },
+    )
 
 
 def get_sets(data, seed=42, do_split=True, drop_y_nan=True, include_validate=True):
