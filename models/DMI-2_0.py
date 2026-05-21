@@ -11,7 +11,7 @@ from utils import get_sets_temporal, split_time, add_wind_direction_cyclic
 
 
 TRAINING_ROW_LIMIT = 1000000
-PREDICTION_OFFSET_LIMIT = 24
+PREDICTION_OFFSET_LIMIT = 168
 
 
 
