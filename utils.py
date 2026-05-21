@@ -40,6 +40,17 @@ def encode_cyclic(
     return X
 
 
+def add_wind_direction_cyclic(X: pd.DataFrame, source: str = "wind_direction", drop_old: bool = True) -> pd.DataFrame:
+    X = X.copy()
+    wind_vals = X[source]
+    wind_radians = np.radians(wind_vals)
+    X[f"{source}_sin"] = np.sin(wind_radians)
+    X[f"{source}_cos"] = np.cos(wind_radians)
+    if drop_old:
+        X = X.drop(columns=[source])
+    return X
+
+
 def split_time(
     X,
     year=True,
